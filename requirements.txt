@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+python-multipart
+firebase-admin
+numpy
+opencv-python
+dlib
+face_recognition
+pydantic
+python-dotenv
+pydantic-settings

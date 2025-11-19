@@ -164,6 +164,9 @@ Desde la interfaz de Swagger, se pueden probar los endpoints directamente desde 
 
 Para una compilación son problemas por dependencias nativas (dlib, OpenCV), se recomienda desplegar en Cloud Run usando
 el Dockerfile incluido.
+También sirve si tenemos el archivo en: `app/api/faacil-facial-recognition-firebase-adminsdk.json`.
+Estos pasos construyen la imagen con Docker (Cloud Build) y despliegan en Cloud Run usando ese JSON mediante variables
+de entorno.
 
 ### Pasos (Guía rápida)
 
@@ -186,7 +189,7 @@ gcloud services enable cloudbuild.googleapis.com run.googleapis.com artifactregi
 gcloud builds submit --tag gcr.io/faacil/facial-recognition-api
 ```
 
-4) Desplegar en Cloud Run
+4) Desplegar en Cloud Run incluyendo las variables de entorno y la ruta al JSON de Firebase
 
 ```bash
 gcloud run deploy facial-recognition-api \
@@ -195,8 +198,10 @@ gcloud run deploy facial-recognition-api \
   --allow-unauthenticated \
   --platform managed \
   --port 8080 \
-  --set-env-vars FIREBASE_SERVICE_ACCOUNT_KEY_PATH=app/api/faacil-facial-recognition-firebase-adminsdk.json,FIREBASE_PROJECT_ID=faacil-facial-recognition,CONFIDENCE_THRESHOLD=0.6
-```
+  --set-env-vars \
+FIREBASE_SERVICE_ACCOUNT_KEY_PATH=app/api/faacil-facial-recognition-firebase-adminsdk.json,\
+FIREBASE_PROJECT_ID=faacil-facial-recognition,\
+CONFIDENCE_THRESHOLD=0.6```
 
 5) Abrir en el navegador
 

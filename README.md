@@ -42,11 +42,13 @@ facial_recognition_backend/
 
 ### 1. Prerrequisitos
 
-- Python 3.11+
+- Python 3.10+
 - Una cuenta de Firebase con Firestore habilitado.
-- `dlib` y sus dependencias (`cmake`, `boost`).
-    - **macOS**: `brew install cmake boost`
-    - **Ubuntu/Debian**: `sudo apt-get update && sudo apt-get install build-essential cmake`
+- Dependencias nativas: esta app usa librerías con extensiones nativas (dlib, opencv). Para evitar errores de
+  compilación en entornos gestionados, se recomienda usar el Dockerfile incluido y desplegar en Cloud Run.
+    - Si se instala sin Docker en máquina local, se necesita toolchains para compilar `dlib`:
+        - **macOS**: `brew install cmake boost`
+        - **Ubuntu/Debian**: `sudo apt-get update && sudo apt-get install build-essential cmake`
 
 ### 2. Clonar el Repositorio
 
@@ -64,9 +66,21 @@ source venv/bin/activate  # En Windows: venv\Scripts\activate
 
 ### 4. Instalar Dependencias
 
+Se tienen dos opciones:
+
+1) Entorno con Docker o con toolchain de compilación instalado (recomendado para despliegue/CI):
+
 ```bash
 pip install -r requirements.txt
 ```
+
+2) Instalación local sin compilar dlib (sin CMake): usa wheels precompiladas con `dlib-bin`:
+
+```bash
+pip install -r requirements-local.txt
+```
+
+Si se usa esta opción, no se necesita tener CMake/compilador instalados para que la instalación funcione en la máquina.
 
 ### 5. Configurar Variables de Entorno
 
@@ -145,6 +159,86 @@ los siguientes enlaces:
 - **ReDoc**: `http://127.0.0.1:8000/redoc`
 
 Desde la interfaz de Swagger, se pueden probar los endpoints directamente desde el navegador.
+
+## Despliegue en Cloud Run con Docker
+
+Para una compilación son problemas por dependencias nativas (dlib, OpenCV), se recomienda desplegar en Cloud Run usando
+el Dockerfile incluido.
+
+### Pasos (Guía rápida)
+
+1) Autenticación y proyecto
+
+```bash
+gcloud auth login
+gcloud config set project faacil
+```
+
+2) Habilitar APIs necesarias (si aún no están habilitadas)
+
+```bash
+gcloud services enable cloudbuild.googleapis.com run.googleapis.com artifactregistry.googleapis.com
+```
+
+3) Construir la imagen con Cloud Build
+
+```bash
+gcloud builds submit --tag gcr.io/faacil/facial-recognition-api
+```
+
+4) Desplegar en Cloud Run
+
+```bash
+gcloud run deploy facial-recognition-api \
+  --image gcr.io/faacil/facial-recognition-api \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --platform managed \
+  --port 8080 \
+  --set-env-vars FIREBASE_SERVICE_ACCOUNT_KEY_PATH=app/api/faacil-facial-recognition-firebase-adminsdk.json,FIREBASE_PROJECT_ID=faacil-facial-recognition,CONFIDENCE_THRESHOLD=0.6
+```
+
+5) Abrir en el navegador
+
+```bash
+gcloud run services describe facial-recognition-api --region <REGION> --format 'value(status.url)'
+```
+
+### Ejecutar localmente con Docker
+
+```bash
+docker build -t facial-recognition-api .
+docker run --rm -p 8080:8080 \
+  -e FIREBASE_SERVICE_ACCOUNT_KEY_PATH=app/api/faacil-facial-recognition-firebase-adminsdk.json \
+  -e FIREBASE_PROJECT_ID=faacil-facial-recognition \
+  -e CONFIDENCE_THRESHOLD=0.6 \
+  facial-recognition-api
+```
+
+La API estará en http://localhost:8080
+
+### Opción alternativa: usar cloudbuild.yaml (build y deploy en un solo comando)
+
+Este repositorio incluye un archivo `cloudbuild.yaml` que automatiza el build y deploy a Cloud Run.
+
+```bash
+gcloud builds submit \
+  --config cloudbuild.yaml \
+  --substitutions=_REGION=us-central1,_SERVICE=facial-recognition-api \
+  .
+```
+
+- Por defecto, el pipeline despliega con las variables de entorno:
+    - `FIREBASE_SERVICE_ACCOUNT_KEY_PATH=app/api/faacil-facial-recognition-firebase-adminsdk.json`
+    - `FIREBASE_PROJECT_ID=faacil-facial-recognition`
+    - `CONFIDENCE_THRESHOLD=0.6`
+- Se pueden cambiar editando `cloudbuild.yaml` o sobreescribiendo `_ENV_VARS` en substitutions.
+
+Notas importantes:
+
+- Cloud Run ejecuta el contenedor escuchando en el puerto 8080, que ya está configurado en el Dockerfile.
+- Si es necesario mantener el JSON de credenciales fuera de la imagen, se puede usar Secret Manager y montar el secreto
+  como variable o archivo; ajusta `--set-env-vars` o usa `--set-secrets` en `gcloud run deploy`.
 
 ## Pruebas con cURL
 

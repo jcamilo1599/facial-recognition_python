@@ -4,6 +4,8 @@ from typing import List, Dict, Any
 import numpy as np
 from app.core.config import settings
 import uuid
+from pathlib import Path
+from google.api_core.exceptions import PermissionDenied, Forbidden
 
 db = None
 
@@ -16,18 +18,47 @@ def initialize_firebase():
 
     global db
 
-    if not firebase_admin._apps:
+    # Si ya está inicializado, solo asegura el cliente y retorna
+    if firebase_admin._apps:
         try:
-            cred = credentials.Certificate(settings.get_firebase_key_path())
-
-            # Para Firestore, solo necesitamos las credenciales
-            firebase_admin.initialize_app(cred)
-            db = firestore.client()
-
-            print("Firebase Firestore initialized successfully.")
+            if db is None:
+                # Obtiene el cliente por si no estaba asignado
+                _client = firestore.client()
+                globals()["db"] = _client
         except Exception as e:
-            print(f"Error initializing Firebase: {e}")
-            raise
+            # No interrumpir el arranque de la app por fallos de inicialización
+            print(f"Warning: Firestore client fetch failed after existing app init: {e}")
+        return
+
+    try:
+        key_path = settings.get_firebase_key_path()
+        key_file = Path(key_path)
+
+        if key_file.exists():
+            # Inicializa con credenciales del archivo si está presente en el contenedor
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred, {
+                "projectId": settings.FIREBASE_PROJECT_ID
+            })
+
+            print("Firebase initialized using service account JSON.")
+        else:
+            # Fallback: usa Application Default Credentials (ADC)
+            # No pasamos credenciales explícitas; Firebase Admin usará ADC del entorno
+            firebase_admin.initialize_app(options={
+                "projectId": settings.FIREBASE_PROJECT_ID
+            })
+
+            print("Firebase initialized using Application Default Credentials (ADC).")
+
+        # Asigna cliente de Firestore
+        _client = firestore.client()
+        globals()["db"] = _client
+        print("Firebase Firestore initialized successfully.")
+    except Exception as e:
+        # No hacer raise para que el contenedor pueda arrancar y responder /health
+        # Las funciones que requieren DB validan db is None y lanzan un error explícito.
+        print(f"Warning: Error initializing Firebase at startup: {e}")
 
 
 def save_user(face_encodings: List[np.ndarray]) -> str:
@@ -72,6 +103,10 @@ def save_user(face_encodings: List[np.ndarray]) -> str:
         user_ref = db.collection("users").document(user_id)
         user_ref.set(user_data)
         return user_id
+    except (PermissionDenied, Forbidden) as e:
+        # Traducir errores de permisos a PermissionError para que la capa API pueda responder 403
+        print(f"Permission error when saving user to Firestore: {e}")
+        raise PermissionError("Missing or insufficient permissions to write to Firestore.") from e
     except Exception as e:
         print(f"Error saving user to Firestore: {str(e)}")
         raise
@@ -91,8 +126,12 @@ def get_all_users() -> List[Dict[str, Any]]:
             "Firebase not initialized. Call initialize_firebase() first."
         )
 
-    users_ref = db.collection("users")
-    docs = users_ref.stream()
+    try:
+        users_ref = db.collection("users")
+        docs = users_ref.stream()
+    except (PermissionDenied, Forbidden) as e:
+        print(f"Permission error when reading users from Firestore: {e}")
+        raise PermissionError("Missing or insufficient permissions to read from Firestore.") from e
 
     users = []
     for doc in docs:

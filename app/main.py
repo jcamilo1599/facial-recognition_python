@@ -77,6 +77,12 @@ async def register(file: UploadFile = File(...)):
             content={"user_id": user_id, "message": "Usuario registrado exitosamente."}
         )
 
+    except PermissionError as e:
+        # Errores de permisos en Firestore: 403
+        return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"error": str(e)})
+    except ConnectionError as e:
+        # Firebase no inicializado u otros problemas de conexión: 503
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"error": str(e)})
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
     except Exception as e:
@@ -131,6 +137,10 @@ async def login(file: UploadFile = File(...)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Autenticación fallida. Rostro no reconocido.")
 
+    except PermissionError as e:
+        return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"error": str(e)})
+    except ConnectionError as e:
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"error": str(e)})
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
     except Exception as e:

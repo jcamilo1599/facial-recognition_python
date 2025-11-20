@@ -9,3 +9,4 @@ face_recognition
 pydantic
 python-dotenv
 pydantic-settings
+tensorflow

@@ -1,174 +1,105 @@
-# API de Reconocimiento Facial
+# API de Reconocimiento Facial (Python + FastAPI + TensorFlow Lite)
 
-Esta es una API de backend construida con FastAPI para realizar registro y autenticación de usuarios mediante
-reconocimiento facial.
+Backend de alto rendimiento diseñado para la gestión de identidades biométricas. Proporciona servicios RESTful para el
+registro y autenticación de usuarios mediante análisis facial, utilizando modelos de aprendizaje profundo optimizados
+para entornos de producción en la nube.
 
-## Características
+## Características Principales
 
-- **Registro de Usuarios**: Registra nuevos usuarios subiendo una imagen de su rostro.
-- **Autenticación de Usuarios**: Auténtica a los usuarios existentes mediante una imagen de su rostro.
-- **Prevención de Duplicados**: Evita que un mismo rostro sea registrado múltiples veces.
-- **Base de Datos Segura**: Utiliza Firebase Firestore para almacenar las codificaciones faciales (no las imágenes).
-- **Manejo de Errores**: Incluye un manejo detallado de errores para diferentes escenarios (ej. no se detecta rostro,
-  múltiples rostros, etc.).
-- **Documentación de la API**: Documentación autogenerada por FastAPI (Swagger UI y ReDoc).
+- **Motor de Inferencia Híbrido:** Combina `dlib` (HOG/CNN) para una detección de rostros robusta y `TensorFlow Lite` (
+  FaceNet 512) para la generación de embeddings de alta precisión.
+- **Compatibilidad Multiplataforma:** Genera vectores biométricos (embeddings) compatibles matemáticamente con la
+  aplicación móvil Android, permitiendo autenticación offline.
+- **Almacenamiento Seguro:** Los vectores faciales se almacenan en Firebase Firestore. No se almacenan imágenes de
+  rostros, garantizando la privacidad.
+- **Arquitectura Serverless:** Contenerizado con Docker y optimizado para despliegue en Google Cloud Run.
+- **Documentación Automática:** Especificación OpenAPI (Swagger) disponible en `/docs`.
+
+## Stack Tecnológico
+
+- **Framework Web:** FastAPI (Python 3.10+)
+- **ML & Visión:** TensorFlow Lite, OpenCV, face_recognition (dlib)
+- **Base de Datos:** Google Firebase Firestore
+- **Infraestructura:** Docker, Google Cloud Build, Google Cloud Run
 
 ## Estructura del Proyecto
 
 ```
-facial_recognition_backend/
+facial_recognition_python/
 ├── app/
-│   ├── api/
-│   │   └── __init__.py
-│   ├── core/
-│   │   ├── __init__.py
-│   │   └── config.py             # Carga de configuraciones desde variables de entorno.
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── api_models.py         # Modelos Pydantic para las respuestas de la API.
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── database.py           # Lógica para interactuar con Firebase.
-│   │   └── facial_recognition.py # Lógica para el procesamiento de imágenes y reconocimiento facial.
-│   ├── utils/
-│   │   └── __init__.py
-│   ├── __init__.py
-│   └── main.py                   # Archivo principal de la aplicación FastAPI con los endpoints.
-├── .env                          # Archivo para las variables de entorno.
-└── requirements.txt              # Dependencias del proyecto.
+│   ├── api/                      # Credenciales y recursos estáticos
+│   ├── core/                     # Configuración (Variables de entorno)
+│   ├── models/                   # Modelos Pydantic (Request/Response)
+│   ├── services/                 # Lógica de negocio
+│   │   ├── database.py           # Capa de acceso a datos (Firestore)
+│   │   └── facial_recognition.py # Pipeline de ML (Detección -> Recorte -> Embedding)
+│   └── main.py                   # Entrypoint de la aplicación
+├── Dockerfile                    # Definición del contenedor para Cloud Run
+├── cloudbuild.yaml               # Pipeline de CI/CD para Google Cloud
+├── requirements.txt              # Dependencias de Python
+└── .env                          # Variables de entorno locales
 ```
 
-## Configuración y Puesta en Marcha
+## Configuración y Ejecución Local
 
 ### 1. Prerrequisitos
 
-- Python 3.10+
-- Una cuenta de Firebase con Firestore habilitado.
-- Dependencias nativas: esta app usa librerías con extensiones nativas (dlib, opencv). Para evitar errores de
-  compilación en entornos gestionados, se recomienda usar el Dockerfile incluido y desplegar en Cloud Run.
-    - Si se instala sin Docker en máquina local, se necesita toolchains para compilar `dlib`:
-        - **macOS**: `brew install cmake boost`
-        - **Ubuntu/Debian**: `sudo apt-get update && sudo apt-get install build-essential cmake`
+- Python 3.10 o superior.
+- CMake (necesario para compilar `dlib`).
+    - macOS: `brew install cmake`
+    - Linux: `sudo apt-get install cmake`
+- Credenciales de Firebase (`serviceAccountKey.json`) ubicadas en `app/api/`.
 
-### 2. Clonar el Repositorio
+### 2. Instalación de Dependencias
 
-```bash
-git clone <URL_DEL_REPOSITORIO>
-cd facial_recognition_backend
-```
-
-### 3. Crear un Entorno Virtual
+Se recomienda utilizar un entorno virtual:
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-```
-
-### 4. Instalar Dependencias
-
-Se tienen dos opciones:
-
-1) Entorno con Docker o con toolchain de compilación instalado (recomendado para despliegue/CI):
-
-```bash
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-2) Instalación local sin compilar dlib (sin CMake): usa wheels precompiladas con `dlib-bin`:
+### 3. Variables de Entorno
+
+Crear un archivo `.env` en la raíz con la siguiente configuración:
+
+```ini
+FIREBASE_SERVICE_ACCOUNT_KEY_PATH = app/api/faacil-facial-recognition-firebase-adminsdk.json
+FIREBASE_PROJECT_ID = faacil-facial-recognition
+
+# Umbral para distancia Euclidiana (L2 Norm). 
+# 1.0 es el valor estándar para FaceNet 512 cuantizado.
+CONFIDENCE_THRESHOLD = 1.0
+```
+
+### 4. Ejecución del Servidor local
 
 ```bash
-pip install -r requirements-local.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Si se usa esta opción, no se necesita tener CMake/compilador instalados para que la instalación funcione en la máquina.
+### 5. Endpoints Principales
 
-### 5. Configurar Variables de Entorno
+`POST /register`: Recibe una imagen (multipart/form-data), extrae el vector facial y lo almacena en Firestore si no
+existe un duplicado.
 
-Crea un archivo `.env` en la raíz del proyecto y añade las siguientes variables:
-
-```
-FIREBASE_SERVICE_ACCOUNT_KEY_PATH=app/api/faacil-facial-recognition-firebase-adminsdk.json
-FIREBASE_PROJECT_ID=faacil-facial-recognition
-CONFIDENCE_THRESHOLD=0.6
-```
-
-- `FIREBASE_SERVICE_ACCOUNT_KEY_PATH`: La ruta al archivo JSON de credenciales de Firebase.
-- `FIREBASE_PROJECT_ID`: El ID del proyecto de Firebase (puedes encontrarlo en la configuración de proyecto).
-- `CONFIDENCE_THRESHOLD`: (Opcional) El umbral de similitud para considerar dos rostros como una coincidencia. El valor
-  por defecto es `0.6`. Un valor más bajo es más estricto.
-
-### 6. Ejecutar la Aplicación
-
-```bash
-uvicorn app.main:app --reload
-```
+`POST /login`: Recibe una imagen, extrae el vector y lo compara con todos los usuarios registrados usando distancia
+Euclidiana. Retorna el ID del usuario y su embedding actualizado si hay coincidencia.
 
 La API estará disponible en `http://127.0.0.1:8000`.
 
-### 7. Endpoints de la API
+## Despliegue en Google Cloud Run
 
-### `POST /register`
+El proyecto está configurado para desplegarse como un contenedor en Cloud Run.
 
-- **Descripción**: Registra un nuevo usuario.
-- **Cuerpo de la Solicitud**: `multipart/form-data` con un campo `file` que contiene la imagen del rostro.
-- **Respuesta Exitosa (201)**:
-  ```json
-  {
-    "user_id": "some-unique-user-id",
-    "message": "Usuario registrado exitosamente."
-  }
-  ```
-- **Respuestas de Error**:
-    - `400 Bad Request`: Si no se detecta un rostro, se detectan múltiples rostros o el formato de la imagen no es
-      válido.
-    - `409 Conflict`: Si el rostro ya está registrado en la base de datos.
-    - `500 Internal Server Error`: Para errores inesperados del servidor.
+### 1. Construcción de la Imagen (Cloud Build)
 
-### `POST /login`
-
-- **Descripción**: Autentica a un usuario existente.
-- **Cuerpo de la Solicitud**: `multipart/form-data` con un campo `file` que contiene la imagen del rostro.
-- **Respuesta Exitosa (200)**:
-  ```json
-  {
-    "user_id": "some-unique-user-id",
-    "message": "Login exitoso."
-  }
-  ```
-- **Respuestas de Error**:
-    - `401 Unauthorized`: Si el rostro no coincide con ningún usuario registrado.
-    - `400 Bad Request`: Si no se detecta un rostro o se detectan múltiples rostros.
-    - `500 Internal Server Error`: Para errores inesperados del servidor.
-
-### `GET /health`
-
-- **Descripción**: Endpoint de verificación de estado para confirmar que la API está funcionando.
-- **Respuesta Exitosa (200)**:
-  ```json
-  {
-    "status": "ok"
-  }
-  ```
-
-## Documentación de la API
-
-Una vez que la aplicación esté en funcionamiento, se puede acceder a la documentación interactiva de la API a traves de
-los siguientes enlaces:
-
-- **Swagger UI**: `http://127.0.0.1:8000/docs`
-- **ReDoc**: `http://127.0.0.1:8000/redoc`
-
-Desde la interfaz de Swagger, se pueden probar los endpoints directamente desde el navegador.
-
-## Despliegue en Cloud Run con Docker
-
-Para una compilación son problemas por dependencias nativas (dlib, OpenCV), se recomienda desplegar en Cloud Run usando
+Para una compilación sin problemas por dependencias nativas (dlib, OpenCV), se recomienda desplegar en Cloud Run usando
 el Dockerfile incluido.
-También sirve si tenemos el archivo en: `app/api/faacil-facial-recognition-firebase-adminsdk.json`.
+El archivo de configuración `app/api/faacil-facial-recognition-firebase-adminsdk.json` debe estar para no tener fallas.
 Estos pasos construyen la imagen con Docker (Cloud Build) y despliegan en Cloud Run usando ese JSON mediante variables
 de entorno.
-
-### Pasos (Guía rápida)
 
 1) Autenticación y proyecto
 
@@ -198,10 +129,12 @@ gcloud run deploy facial-recognition-api \
   --allow-unauthenticated \
   --platform managed \
   --port 8080 \
+  --memory 1Gi \
   --set-env-vars \
 FIREBASE_SERVICE_ACCOUNT_KEY_PATH=app/api/faacil-facial-recognition-firebase-adminsdk.json,\
 FIREBASE_PROJECT_ID=faacil-facial-recognition,\
-CONFIDENCE_THRESHOLD=0.6```
+CONFIDENCE_THRESHOLD=0.6
+```
 
 5) Abrir en el navegador
 
@@ -209,7 +142,7 @@ CONFIDENCE_THRESHOLD=0.6```
 gcloud run services describe facial-recognition-api --region <REGION> --format 'value(status.url)'
 ```
 
-### Ejecutar localmente con Docker
+### 2. Ejecutar localmente con Docker
 
 ```bash
 docker build -t facial-recognition-api .
@@ -221,6 +154,77 @@ docker run --rm -p 8080:8080 \
 ```
 
 La API estará en http://localhost:8080
+
+### 3. Endpoints de la API
+
+### `POST /register`
+
+- **Descripción**: Registra un nuevo usuario.
+- **Cuerpo de la Solicitud**: `multipart/form-data` con un campo `file` que contiene la imagen del rostro.
+- **Respuesta Exitosa (201)**:
+  ```json
+  {
+    "user_id": "some-unique-user-id",
+    "message": "Usuario registrado exitosamente."
+  }
+  ```
+- **Respuestas de Error**:
+    - `400 Bad Request`: Si no se detecta un rostro, se detectan múltiples rostros o el formato de la imagen no es
+      válido.
+    - `409 Conflict`: Si el rostro ya está registrado en la base de datos.
+    - `500 Internal Server Error`: Para errores inesperados del servidor.
+
+### `POST /login`
+
+- **Descripción**: Autentica a un usuario existente.
+- **Cuerpo de la Solicitud**: `multipart/form-data` con un campo `file` que contiene la imagen del rostro.
+- **Respuesta Exitosa (200)**:
+  ```json
+  {
+    "user_id": "some-unique-user-id",
+    "message": "Login exitoso.",
+    "embedding": []
+  }
+  ```
+- **Respuestas de Error**:
+    - `401 Unauthorized`: Si el rostro no coincide con ningún usuario registrado.
+    - `400 Bad Request`: Si no se detecta un rostro o se detectan múltiples rostros.
+    - `500 Internal Server Error`: Para errores inesperados del servidor.
+
+### `GET /health`
+
+- **Descripción**: Endpoint de verificación de estado para confirmar que la API está funcionando.
+- **Respuesta Exitosa (200)**:
+  ```json
+  {
+    "status": "ok"
+  }
+  ```
+
+## Detalles del Pipeline de ML
+
+Para garantizar la consistencia entre el backend y el cliente móvil, se sigue estrictamente el siguiente proceso:
+
+1. **Preprocesamiento:**
+    - Detección de rostro y obtención de landmarks.
+    - Recorte (Cropping) del área facial.
+    - Redimensionamiento a 160x160 píxeles.
+    - Estandarización (Whitening): `(x - mean) / std`.
+2. **Inferencia:**
+    - Modelo: `facenet_512.tflite` (Inception ResNet v1).
+    - Salida: Vector de 512 flotantes.
+3. **Post-procesamiento:**
+    - Normalización L2 del vector resultante.
+
+## Documentación de la API
+
+Una vez que la aplicación esté en funcionamiento, se puede acceder a la documentación interactiva de la API a traves de
+los siguientes enlaces:
+
+- **Swagger UI**: `http://127.0.0.1:8000/docs`
+- **ReDoc**: `http://127.0.0.1:8000/redoc`
+
+Desde la interfaz de Swagger, se pueden probar los endpoints directamente desde el navegador.
 
 ### Opción alternativa: usar cloudbuild.yaml (build y deploy en un solo comando)
 

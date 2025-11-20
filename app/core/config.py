@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     FIREBASE_PROJECT_ID: str = "faacil-facial-recognition"
 
     # El umbral de similitud para considerar dos rostros como una coincidencia.
-    CONFIDENCE_THRESHOLD: float = 0.6
+    # Ajustado para FaceNet TFLite con normalización L2 (0.0 a 2.0)
+    # 0.8 es estricto, 1.0 es balanceado, 1.2 es permisivo.
+    CONFIDENCE_THRESHOLD: float = 1.0
 
     class Config:
         env_file = ".env"

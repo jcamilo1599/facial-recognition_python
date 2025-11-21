@@ -45,9 +45,9 @@ facial_recognition_python/
 ### 1. Prerrequisitos
 
 - Python 3.10 o superior.
-- CMake (necesario para compilar `dlib`).
-    - macOS: `brew install cmake`
-    - Linux: `sudo apt-get install cmake`
+- CMake y otras instalaciones necesarias para compilar `dlib`.
+    - macOS: `brew install cmake libpng libjpeg boost`
+    - Linux: `sudo apt-get install build-essential cmake libopenblas-dev liblapack-dev libx11-dev libgtk-3-dev`
 - Credenciales de Firebase (`serviceAccountKey.json`) ubicadas en `app/api/`.
 
 ### 2. Instalación de Dependencias
